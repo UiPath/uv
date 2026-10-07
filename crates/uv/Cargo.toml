@@ -161,10 +161,14 @@ nix = { workspace = true }
 uv-unix = { workspace = true }
 
 [features]
-default = ["performance", "test-defaults", "blake2b"]
+default = ["performance", "test-defaults", "cloud-auth", "blake2b"]
 native-auth = []
-# BLAKE2b-256 hash verification, which cannot come from OpenSSL -- see uv-extract/Cargo.toml.
-# On for ordinary builds; a FIPS build leaves it off so the crate is absent, not merely unused.
+# Crypto that is not the system OpenSSL. Both are on for the commercial build and off for the
+# FedRAMP one, which builds with `--no-default-features --features performance` so that no
+# RustCrypto implementation is compiled into the binary at all.
+# `cloud-auth` carries reqsign (sha1, hmac, and rsa via its azure/google signers); `blake2b`
+# carries the blake2 crate, which OpenSSL 3.0 cannot replace -- see uv-extract/Cargo.toml.
+cloud-auth = ["uv-auth/cloud-auth"]
 blake2b = ["uv-extract/blake2b"]
 # Use better memory allocators, etc.
 performance = ["performance-memory-allocator"]

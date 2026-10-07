@@ -47,7 +47,11 @@ uv-git-types = { version = "0.0.69", path = "crates/uv-git-types" }
 uv-globfilter = { version = "0.0.69", path = "crates/uv-globfilter" }
 uv-install-wheel = { version = "0.0.69", path = "crates/uv-install-wheel", default-features = false }
 uv-installer = { version = "0.0.69", path = "crates/uv-installer" }
-uv-keyring = { version = "0.0.69", path = "crates/uv-keyring" }
+# `default-features = false` lives here rather than on uv-auth's dependency line: cargo refuses
+# `default-features = false` on a workspace-inherited dependency. uv-keyring's defaults include
+# the `secret-service` backend, which pulls aes/pbkdf2/scrypt and cannot work in a container
+# with no DBus; uv-auth re-adds the two platform backends it does want.
+uv-keyring = { version = "0.0.69", path = "crates/uv-keyring", default-features = false }
 uv-logging = { version = "0.0.69", path = "crates/uv-logging" }
 uv-macros = { version = "0.0.69", path = "crates/uv-macros" }
 uv-metadata = { version = "0.0.69", path = "crates/uv-metadata" }

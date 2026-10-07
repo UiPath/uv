@@ -18,7 +18,10 @@ workspace = true
 [dependencies]
 uv-cache-key = { workspace = true }
 uv-fs = { workspace = true }
-uv-keyring = { workspace = true, features = ["apple-native", "secret-service", "windows-native"] }
+# No `secret-service`: uv-keyring's defaults are switched off at the workspace root, and only the
+# two platform backends are re-added here. Without a *nix backend uv-keyring falls back to its nop
+# credential builder, which is what these containers get today anyway for want of a DBus daemon.
+uv-keyring = { workspace = true, features = ["apple-native", "windows-native"] }
 uv-netrc = { workspace = true }
 uv-once-map = { workspace = true }
 uv-preview = { workspace = true }
@@ -37,7 +40,7 @@ fs-err = { workspace = true, features = ["tokio"] }
 http = { workspace = true }
 jiff = { workspace = true }
 percent-encoding = { workspace = true }
-reqsign = { workspace = true }
+reqsign = { workspace = true, optional = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 rustc-hash = { workspace = true }
@@ -56,3 +59,10 @@ tempfile = { workspace = true }
 test-log = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }
+
+[features]
+default = []
+## Authenticate to S3, Azure Blob and GCS-hosted indexes. Off by default so that only a crate that
+## asks for it by name pulls `reqsign` -- cargo unifies features across the graph, so a default
+## would re-enable it for every dependent and defeat the FIPS build's exclusion of RustCrypto.
+cloud-auth = ["dep:reqsign"]
