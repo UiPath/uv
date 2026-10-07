@@ -108,6 +108,9 @@ index URL.
 - SHA-256, SHA-384 and SHA-512 for package-integrity verification, wheel RECORD
   entries and the build backend's dist hashes.
 - MD5, when the loaded providers offer it — that is, outside FIPS mode.
+- The random bytes behind `uv_fastid::Id::secure`, which names cache archive and
+  source-revision directories. `rand` stays in the graph through `retry-policies`, which
+  uses it only to jitter retry delays.
 
 ## What is not in the module, by configuration
 
