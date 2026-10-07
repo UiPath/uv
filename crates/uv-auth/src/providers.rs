@@ -1,9 +1,13 @@
+#[cfg(feature = "cloud-auth")]
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "cloud-auth")]
 use reqsign::aws::DefaultSigner as AwsDefaultSigner;
+#[cfg(feature = "cloud-auth")]
 use reqsign::azure::DefaultSigner as AzureDefaultSigner;
+#[cfg(feature = "cloud-auth")]
 use reqsign::google::DefaultSigner as GcsDefaultSigner;
 use tracing::debug;
 use url::ParseError;
@@ -59,14 +63,17 @@ impl HuggingFaceProvider {
     }
 }
 
+#[cfg(feature = "cloud-auth")]
 /// The [`SafeUrl`] for the S3 endpoint, if set.
 static S3_ENDPOINT_URL: LazyLock<Result<Option<SafeUrl>, ParseError>> =
     LazyLock::new(|| endpoint_url(EnvVars::UV_S3_ENDPOINT_URL));
 
+#[cfg(feature = "cloud-auth")]
 /// A provider for authentication credentials for S3 endpoints.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct S3EndpointProvider;
 
+#[cfg(feature = "cloud-auth")]
 impl S3EndpointProvider {
     /// Returns `true` if the URL matches the configured S3 endpoint.
     pub(crate) fn is_s3_endpoint(url: &SafeUrl, preview: Preview) -> Result<bool> {
@@ -109,14 +116,17 @@ impl S3EndpointProvider {
     }
 }
 
+#[cfg(feature = "cloud-auth")]
 /// The [`SafeUrl`] for the GCS endpoint, if set.
 static GCS_ENDPOINT_URL: LazyLock<Result<Option<SafeUrl>, ParseError>> =
     LazyLock::new(|| endpoint_url(EnvVars::UV_GCS_ENDPOINT_URL));
 
+#[cfg(feature = "cloud-auth")]
 /// A provider for authentication credentials for GCS endpoints.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GcsEndpointProvider;
 
+#[cfg(feature = "cloud-auth")]
 impl GcsEndpointProvider {
     /// Returns `true` if the URL matches the configured GCS endpoint.
     pub(crate) fn is_gcs_endpoint(url: &SafeUrl, preview: Preview) -> Result<bool> {
@@ -155,6 +165,9 @@ static AZURE_ENDPOINT_URL: LazyLock<Result<Option<SafeUrl>, ParseError>> =
     LazyLock::new(|| endpoint_url(EnvVars::UV_AZURE_ENDPOINT_URL));
 
 /// A provider for authentication credentials for Azure endpoints.
+///
+/// Recognising an Azure endpoint is a URL match and stays in every build, so the storage API
+/// version header still reaches anonymous requests; only the signer needs `cloud-auth`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AzureEndpointProvider;
 
@@ -186,6 +199,7 @@ impl AzureEndpointProvider {
     ///
     /// This is potentially expensive as it may invoke credential helpers, so the result
     /// should be cached.
+    #[cfg(feature = "cloud-auth")]
     pub(crate) fn create_signer() -> AzureDefaultSigner {
         reqsign::azure::default_signer()
     }
@@ -213,6 +227,7 @@ fn is_endpoint_url(url: &SafeUrl, endpoint_url: &SafeUrl) -> bool {
     is_path_prefix(endpoint_url.path(), url.path())
 }
 
+#[cfg(feature = "cloud-auth")]
 #[cfg(test)]
 mod tests {
     use super::*;
