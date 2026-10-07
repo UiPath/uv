@@ -173,6 +173,7 @@ impl Error {
             | ErrorKind::LocalPackageNotFound(_)
             | ErrorKind::LocalIndexNotFound(_)
             | ErrorKind::MetadataHashMismatch { .. }
+            | ErrorKind::Hasher(_)
             | ErrorKind::MetadataParseError(..)
             | ErrorKind::BadJson { .. }
             | ErrorKind::BadHtml { .. }
@@ -488,6 +489,10 @@ pub enum ErrorKind {
         expected: HashDigest,
         actual: HashDigest,
     },
+
+    /// A hash the package index published cannot be computed by this build.
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
 
     /// The metadata file could not be parsed.
     #[error("Couldn't parse metadata of `{0}` from `{1}`")]

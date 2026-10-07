@@ -109,7 +109,10 @@ fn hash_reader(criterion: &mut Criterion<WallTime>) {
                                     let hashers = algorithms
                                         .iter()
                                         .copied()
-                                        .map(Hasher::from)
+                                        .map(|algorithm| {
+                                            Hasher::try_from(algorithm)
+                                                .expect("benchmarked algorithms are available")
+                                        })
                                         .collect::<Vec<_>>();
                                     (bytes, hashers)
                                 })
