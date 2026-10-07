@@ -592,7 +592,7 @@ impl<'a> BaseClientBuilder<'a> {
             Security::Insecure => client_builder.danger_accept_invalid_certs(true),
         };
 
-        let client_builder = client_builder.tls_backend_rustls();
+        let client_builder = client_builder.tls_backend_native();
 
         // Configure the certificate source.
         //

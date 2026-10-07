@@ -12,6 +12,7 @@ use tracing::warn;
 
 use crate::base_client::CertificateSource;
 use crate::middleware::OfflineError;
+use crate::retry::is_tls_certificate_verify_error;
 use crate::{FlatIndexError, html};
 use uv_cache::Error as CacheError;
 use uv_distribution_filename::{WheelFilename, WheelFilenameError};
@@ -669,13 +670,8 @@ impl WrappedReqwestError {
             if !reqwest_err.is_connect() {
                 return false;
             }
-            // Self is "error sending request for url", the first source is "error trying to connect",
-            // the second source is "dns error". We have to check for the string because hyper errors
-            // are opaque.
-            if std::error::Error::source(&reqwest_err)
-                .and_then(|err| err.source())
-                .is_some_and(|err| err.to_string().starts_with("invalid peer certificate: "))
-            {
+            // The certificate failed verification, as reported by OpenSSL through native-tls.
+            if is_tls_certificate_verify_error(reqwest_err) {
                 return true;
             }
         }

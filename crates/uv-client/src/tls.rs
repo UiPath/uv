@@ -199,13 +199,8 @@ pub struct Certificates(Vec<CertificateDer<'static>>);
 impl Certificates {
     /// Load the bundled Mozilla root certificates.
     ///
-    /// We use `webpki-root-certs` (which gives us [`CertificateDer`] values) rather than the more
-    /// space-efficient `webpki-roots` (pre-parsed [`TrustAnchor`] values) because reqwest's
-    /// [`ClientBuilder::tls_certs_only`] accepts [`Certificate`] values built from DER bytes. Using
-    /// `webpki-roots` would require constructing a [`rustls::ClientConfig`] manually and passing it
-    /// via the semver-unstable [`ClientBuilder::tls_backend_preconfigured`], which also means
-    /// taking ownership of ALPN, SNI, certificate verification, and mTLS configuration that reqwest
-    /// otherwise handles for us.
+    /// We use `webpki-root-certs` because reqwest's [`ClientBuilder::tls_certs_only`] accepts
+    /// [`Certificate`] values built from DER bytes.
     pub(crate) fn webpki_roots() -> Self {
         // Each [`CertificateDer`] in [`webpki_root_certs::TLS_SERVER_ROOT_CERTS`] borrows from static
         // data, so cloning into the [`Vec`] only copies the fat pointer, not the certificate bytes.
@@ -445,7 +440,6 @@ impl Certificates {
             .iter()
             // `Certificate::from_der` returns a `Result` for backend compatibility, but these
             // certificates come from `rustls-native-certs` and are already validated DER certs.
-            // In our rustls-based client configuration this conversion is expected to succeed.
             .filter_map(|cert| match Certificate::from_der(cert) {
                 Ok(certificate) => Some(certificate),
                 Err(err) => {
@@ -475,6 +469,14 @@ pub(crate) enum CertificateError {
     Io(#[from] io::Error),
     #[error(transparent)]
     Reqwest(reqwest::Error),
+    #[error(
+        "`SSL_CLIENT_CERT` must contain a certificate chain and an unencrypted PKCS#8, PKCS#1 or SEC1 private key"
+    )]
+    InvalidIdentity,
+    #[error("failed to parse `SSL_CLIENT_CERT`")]
+    InvalidIdentityPem(#[from] pem::PemError),
+    #[error("failed to parse the private key in `SSL_CLIENT_CERT`")]
+    InvalidIdentityKey(#[source] openssl::error::ErrorStack),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -493,10 +495,39 @@ pub(crate) fn read_identity(
 ) -> Result<Identity, CertificateError> {
     let mut buf = Vec::new();
     fs_err::File::open(ssl_client_cert)?.read_to_end(&mut buf)?;
-    Identity::from_pem(&buf).map_err(|tls_err| {
-        debug_assert!(tls_err.is_builder(), "must be a rustls::Error internally");
-        CertificateError::Reqwest(tls_err)
-    })
+    // The OpenSSL-backed native-tls API accepts the certificate chain and key separately, while
+    // uv's SSL_CLIENT_CERT format contains both in one file.
+    let sections = pem::parse_many(buf)?;
+    let certificates = sections
+        .iter()
+        .filter(|section| section.tag() == "CERTIFICATE")
+        .map(pem::encode)
+        .collect::<String>();
+    // The same key formats the Rustls-backed client took: PKCS#8, PKCS#1 (RSA) and SEC1 (EC).
+    // native-tls only takes PKCS#8, so the key is re-encoded through OpenSSL. Encrypted keys stay
+    // unsupported, as before: an `ENCRYPTED PRIVATE KEY` block is not matched, and a legacy
+    // `Proc-Type: 4,ENCRYPTED` block fails to decrypt with the empty passphrase the callback
+    // supplies -- which also keeps OpenSSL from prompting for one on the terminal.
+    let private_key = sections
+        .iter()
+        .find(|section| {
+            matches!(
+                section.tag(),
+                "PRIVATE KEY" | "RSA PRIVATE KEY" | "EC PRIVATE KEY"
+            )
+        })
+        .ok_or(CertificateError::InvalidIdentity)?;
+    if certificates.is_empty() {
+        return Err(CertificateError::InvalidIdentity);
+    }
+    let private_key = openssl::pkey::PKey::private_key_from_pem_callback(
+        pem::encode(private_key).as_bytes(),
+        |_| Ok(0),
+    )
+    .and_then(|key| key.private_key_to_pem_pkcs8())
+    .map_err(CertificateError::InvalidIdentityKey)?;
+    Identity::from_pkcs8_pem(certificates.as_bytes(), &private_key)
+        .map_err(CertificateError::Reqwest)
 }
 
 #[cfg(test)]
@@ -613,5 +644,121 @@ mod tests {
     fn test_webpki_roots_not_empty() {
         let certs = Certificates::webpki_roots();
         assert!(certs.iter().count() > 0);
+    }
+
+    /// A self-signed certificate for `key`, PEM-encoded.
+    fn self_signed_cert_pem(key: &openssl::pkey::PKey<openssl::pkey::Private>) -> String {
+        use openssl::{asn1::Asn1Time, hash::MessageDigest, x509::X509};
+
+        let mut name = openssl::x509::X509NameBuilder::new().unwrap();
+        name.append_entry_by_text("CN", "localhost").unwrap();
+        let name = name.build();
+        let mut builder = X509::builder().unwrap();
+        builder.set_version(2).unwrap();
+        builder.set_subject_name(&name).unwrap();
+        builder.set_issuer_name(&name).unwrap();
+        builder.set_pubkey(key).unwrap();
+        builder
+            .set_not_before(&Asn1Time::days_from_now(0).unwrap())
+            .unwrap();
+        builder
+            .set_not_after(&Asn1Time::days_from_now(1).unwrap())
+            .unwrap();
+        builder.sign(key, MessageDigest::sha256()).unwrap();
+        String::from_utf8(builder.build().to_pem().unwrap()).unwrap()
+    }
+
+    fn rsa_key() -> openssl::pkey::PKey<openssl::pkey::Private> {
+        openssl::pkey::PKey::from_rsa(openssl::rsa::Rsa::generate(2048).unwrap()).unwrap()
+    }
+
+    fn ec_key() -> openssl::pkey::PKey<openssl::pkey::Private> {
+        let group =
+            openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1).unwrap();
+        openssl::pkey::PKey::from_ec_key(openssl::ec::EcKey::generate(&group).unwrap()).unwrap()
+    }
+
+    /// Write `cert` followed by `key` to a file and read it back as an identity.
+    fn read_identity_from(cert: &str, key: &[u8]) -> Result<Identity, CertificateError> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("client.pem");
+        let mut contents = cert.as_bytes().to_vec();
+        contents.extend_from_slice(key);
+        fs_err::write(&path, contents).unwrap();
+        read_identity(path.as_os_str())
+    }
+
+    #[test]
+    fn test_read_identity_pkcs8_key() {
+        let key = rsa_key();
+        let pem = key.private_key_to_pem_pkcs8().unwrap();
+        assert!(String::from_utf8_lossy(&pem).starts_with("-----BEGIN PRIVATE KEY-----"));
+        read_identity_from(&self_signed_cert_pem(&key), &pem).unwrap();
+    }
+
+    #[test]
+    fn test_read_identity_pkcs1_rsa_key() {
+        let key = rsa_key();
+        let pem = key.rsa().unwrap().private_key_to_pem().unwrap();
+        assert!(String::from_utf8_lossy(&pem).starts_with("-----BEGIN RSA PRIVATE KEY-----"));
+        read_identity_from(&self_signed_cert_pem(&key), &pem).unwrap();
+    }
+
+    #[test]
+    fn test_read_identity_sec1_ec_key() {
+        let key = ec_key();
+        let pem = key.ec_key().unwrap().private_key_to_pem().unwrap();
+        assert!(String::from_utf8_lossy(&pem).starts_with("-----BEGIN EC PRIVATE KEY-----"));
+        read_identity_from(&self_signed_cert_pem(&key), &pem).unwrap();
+    }
+
+    #[test]
+    fn test_read_identity_key_before_certificate() {
+        let key = ec_key();
+        let pem = String::from_utf8(key.private_key_to_pem_pkcs8().unwrap()).unwrap();
+        read_identity_from(&pem, self_signed_cert_pem(&key).as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn test_read_identity_rejects_encrypted_pkcs8_key() {
+        let key = rsa_key();
+        let pem = key
+            .private_key_to_pem_pkcs8_passphrase(openssl::symm::Cipher::aes_256_cbc(), b"secret")
+            .unwrap();
+        assert!(String::from_utf8_lossy(&pem).starts_with("-----BEGIN ENCRYPTED PRIVATE KEY-----"));
+        let err = read_identity_from(&self_signed_cert_pem(&key), &pem).unwrap_err();
+        assert!(matches!(err, CertificateError::InvalidIdentity), "{err:?}");
+    }
+
+    #[test]
+    fn test_read_identity_rejects_encrypted_pkcs1_key() {
+        let key = rsa_key();
+        let pem = key
+            .rsa()
+            .unwrap()
+            .private_key_to_pem_passphrase(openssl::symm::Cipher::aes_256_cbc(), b"secret")
+            .unwrap();
+        assert!(String::from_utf8_lossy(&pem).contains("Proc-Type: 4,ENCRYPTED"));
+        // Must fail rather than prompt for a passphrase.
+        let err = read_identity_from(&self_signed_cert_pem(&key), &pem).unwrap_err();
+        assert!(
+            matches!(err, CertificateError::InvalidIdentityKey(_)),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn test_read_identity_rejects_missing_key() {
+        let key = rsa_key();
+        let err = read_identity_from(&self_signed_cert_pem(&key), b"").unwrap_err();
+        assert!(matches!(err, CertificateError::InvalidIdentity), "{err:?}");
+    }
+
+    #[test]
+    fn test_read_identity_rejects_missing_certificate() {
+        let key = rsa_key();
+        let pem = key.rsa().unwrap().private_key_to_pem().unwrap();
+        let err = read_identity_from("", &pem).unwrap_err();
+        assert!(matches!(err, CertificateError::InvalidIdentity), "{err:?}");
     }
 }
