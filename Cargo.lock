@@ -6884,7 +6884,7 @@ dependencies = [
 name = "uv-fastid"
 version = "0.0.91"
 dependencies = [
- "rand 0.10.2",
+ "openssl",
  "serde",
  "serde_json",
 ]
