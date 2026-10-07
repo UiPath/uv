@@ -10,8 +10,6 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
-use rand::RngCore as _;
-
 const ALPHABET: [u8; 64] = *b"_-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const MASK: u8 = 63;
 
@@ -78,10 +76,13 @@ impl Id {
     ///
     /// The resulting ID is suitable for use in contexts where uniqueness is needed and
     /// the risk of an adversarial collision is non-negligible.
+    ///
+    /// The bytes come from the system OpenSSL's DRBG, so that on a FIPS host they are the
+    /// validated module's output rather than a userspace generator's.
     pub fn secure() -> Self {
         let mut raw = [0u8; 16];
-        let mut rng = rand::rng();
-        rng.fill_bytes(raw.as_mut());
+        openssl::rand::rand_bytes(&mut raw)
+            .expect("the system OpenSSL failed to generate random bytes");
         Self(Self::reduce(&raw))
     }
 
