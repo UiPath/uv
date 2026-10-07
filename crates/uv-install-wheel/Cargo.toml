@@ -37,6 +37,7 @@ csv = { workspace = true }
 data-encoding = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
+openssl = { workspace = true }
 owo-colors = { workspace = true }
 pathdiff = { workspace = true }
 regex = { workspace = true, features = ["perf", "unicode"] }
@@ -44,7 +45,6 @@ regex-automata = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 walkdir = { workspace = true }

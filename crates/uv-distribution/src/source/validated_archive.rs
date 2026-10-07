@@ -73,8 +73,8 @@ impl ValidatedSourceArchive {
         let mut hashers = algorithms
             .iter()
             .copied()
-            .map(Hasher::from)
-            .collect::<Vec<_>>();
+            .map(Hasher::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         let mut hasher = HashReader::new(reader, &mut hashers);
 
         let (staging_dir, _) =
@@ -225,7 +225,7 @@ mod tests {
         extract(&cache, reader(&bytes, &trailing_read), NO_VALIDATION).await?;
         assert!(!trailing_read.get());
 
-        let digest = HashDigest::from(Hasher::from(HashAlgorithm::Sha256));
+        let digest = HashDigest::from(Hasher::try_from(HashAlgorithm::Sha256)?);
         for validation in [
             ArchiveValidation {
                 extra_algorithms: &[HashAlgorithm::Sha256],
@@ -283,7 +283,7 @@ mod tests {
                 .join("../../test/links/basic_package-0.1.0.tar.gz"),
         )?;
         let cache = cache()?;
-        let wrong_hash = HashDigest::from(Hasher::from(HashAlgorithm::Sha256));
+        let wrong_hash = HashDigest::from(Hasher::try_from(HashAlgorithm::Sha256)?);
         let result = extract(
             &cache,
             &bytes[..],

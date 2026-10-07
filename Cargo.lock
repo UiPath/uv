@@ -2741,16 +2741,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4facc753ae494aeb6e3c22f839b158aebd4f9270f55cd3c79906c45476c47ab4"
 
 [[package]]
-name = "md-5"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
-dependencies = [
- "cfg-if",
- "digest 0.11.3",
-]
-
-[[package]]
 name = "mea"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3121,7 +3111,7 @@ version = "0.10.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77823a27f0babb03091cb9ed9ef80af3b39dbc82f97e8fa530374b7dafd87a45"
 dependencies = [
- "bitflags 2.13.1",
+ "bitflags 2.13.2",
  "cfg-if",
  "foreign-types",
  "libc",
@@ -6086,6 +6076,7 @@ dependencies = [
  "indoc",
  "insta",
  "itertools 0.14.0",
+ "openssl",
  "regex",
  "rustc-hash",
  "schemars",
@@ -6754,14 +6745,13 @@ dependencies = [
  "flate2",
  "fs-err",
  "futures",
- "md-5",
+ "openssl",
  "rayon",
  "regex",
  "reqwest",
  "rustc-hash",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "tar-codec",
  "tempfile",
  "thiserror",
@@ -6930,6 +6920,7 @@ dependencies = [
  "fs-err",
  "indoc",
  "itertools 0.14.0",
+ "openssl",
  "owo-colors",
  "pathdiff",
  "regex",
@@ -6939,7 +6930,6 @@ dependencies = [
  "self-replace",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "thiserror",
  "tracing",
  "uv-distribution-filename",
