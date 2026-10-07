@@ -10,7 +10,7 @@ use fs_err::{DirEntry, File};
 use itertools::Itertools;
 use mailparse::parse_headers;
 use rustc_hash::FxHashMap;
-use sha2::{Digest, Sha256};
+use openssl::hash::{Hasher, MessageDigest};
 use tracing::{debug, instrument, trace, warn};
 use walkdir::WalkDir;
 
@@ -82,7 +82,10 @@ pub(crate) fn read_scripts_from_section(
 /// <https://doc.rust-lang.org/1.58.0/src/std/io/copy.rs.html#128-156>
 fn copy_and_hash(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<(u64, String)> {
     // TODO: Do we need to support anything besides sha256?
-    let mut hasher = Sha256::new();
+    // SHA-256 comes from the system OpenSSL, so it is the validated module's implementation
+    // wherever a FIPS provider is active. It is an approved algorithm, so the fetch cannot fail on
+    // that account; any error here is an OpenSSL-internal one and is surfaced as an I/O error.
+    let mut hasher = Hasher::new(MessageDigest::sha256()).map_err(io::Error::other)?;
     // Same buf size as std. Note that this number is important for performance
     let mut buf = vec![0; 8 * 1024];
 
@@ -94,13 +97,14 @@ fn copy_and_hash(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<
             Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
             Err(e) => return Err(e),
         };
-        hasher.update(&buf[..len]);
+        hasher.update(&buf[..len]).map_err(io::Error::other)?;
         writer.write_all(&buf[..len])?;
         written += len as u64;
     }
+    let digest = hasher.finish().map_err(io::Error::other)?;
     Ok((
         written,
-        format!("sha256={}", BASE64URL_NOPAD.encode(&hasher.finalize())),
+        format!("sha256={}", BASE64URL_NOPAD.encode(&digest)),
     ))
 }
 
@@ -856,7 +860,8 @@ fn write_file_recorded(
 
     uv_fs::write_atomic_sync(site_packages.join(relative_path), content.as_ref())?;
 
-    let hash = Sha256::new().chain_update(content.as_ref()).finalize();
+    let hash = openssl::hash::hash(MessageDigest::sha256(), content.as_ref())
+        .map_err(|err| Error::Io(io::Error::other(err)))?;
     let encoded_hash = format!("sha256={}", BASE64URL_NOPAD.encode(&hash));
     record.push(RecordEntry {
         path: relative_path.portable_display().to_string(),

@@ -2838,8 +2838,8 @@ impl<'a, T: BuildContext> SourceDistributionBuilder<'a, T> {
         let mut hashers = algorithms
             .iter()
             .copied()
-            .map(Hasher::from)
-            .collect::<Vec<_>>();
+            .map(Hasher::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         let mut hasher = uv_extract::hash::HashReader::new(reader.compat(), &mut hashers);
 
         // Download and unzip the source distribution into a temporary directory.
@@ -2926,8 +2926,8 @@ impl<'a, T: BuildContext> SourceDistributionBuilder<'a, T> {
         let mut hashers = algorithms
             .iter()
             .copied()
-            .map(Hasher::from)
-            .collect::<Vec<_>>();
+            .map(Hasher::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         let mut hasher = uv_extract::hash::HashReader::new(reader, &mut hashers);
 
         // Unzip the archive into a temporary directory.

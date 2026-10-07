@@ -630,7 +630,7 @@ impl HashAlgorithm {
     }
 
     /// Return the string representation of the [`HashAlgorithm`].
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Md5 => "md5",
             Self::Sha256 => "sha256",

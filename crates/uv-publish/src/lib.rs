@@ -107,6 +107,8 @@ pub enum PublishError {
 pub enum PublishPrepareError {
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
     #[error("Failed to read metadata")]
     Metadata(#[from] uv_metadata::Error),
     #[error("Failed to read metadata")]
@@ -1017,12 +1019,16 @@ pub async fn check_url(
     if let Some(remote_hash) = archived_file.hashes().first() {
         // We accept the risk for TOCTOU errors here, since we already read the file once before the
         // streaming upload to compute the hash for the form metadata.
-        let local_hash = &hash_file(
-            file,
-            filename,
-            vec![Hasher::from(remote_hash.algorithm)],
-            reporter,
-        )
+        // The registry chooses the algorithm here, so it may name one this build cannot compute
+        // (md5 under a FIPS provider). Surfaced rather than silently skipped: failing to check a
+        // hash the registry published is not the same as there being nothing to check.
+        let hasher = Hasher::try_from(remote_hash.algorithm).map_err(|err| {
+            PublishError::PublishPrepare(
+                file.to_path_buf(),
+                Box::new(PublishPrepareError::Hasher(err)),
+            )
+        })?;
+        let local_hash = &hash_file(file, filename, vec![hasher], reporter)
         .await
         .map_err(|err| {
             PublishError::PublishPrepare(file.to_path_buf(), Box::new(PublishPrepareError::Io(err)))
@@ -1158,8 +1164,8 @@ impl FormMetadata {
             file,
             filename,
             vec![
-                Hasher::from(HashAlgorithm::Sha256),
-                Hasher::from(HashAlgorithm::Blake2b),
+                Hasher::try_from(HashAlgorithm::Sha256)?,
+                Hasher::try_from(HashAlgorithm::Blake2b)?,
             ],
             reporter,
         )

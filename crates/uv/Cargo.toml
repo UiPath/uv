@@ -161,8 +161,11 @@ nix = { workspace = true }
 uv-unix = { workspace = true }
 
 [features]
-default = ["performance", "test-defaults"]
+default = ["performance", "test-defaults", "blake2b"]
 native-auth = []
+# BLAKE2b-256 hash verification, which cannot come from OpenSSL -- see uv-extract/Cargo.toml.
+# On for ordinary builds; a FIPS build leaves it off so the crate is absent, not merely unused.
+blake2b = ["uv-extract/blake2b"]
 # Use better memory allocators, etc.
 performance = ["performance-memory-allocator"]
 performance-memory-allocator = ["dep:uv-performance-memory-allocator"]
