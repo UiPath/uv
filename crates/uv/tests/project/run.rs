@@ -4645,7 +4645,13 @@ fn run_remote_pep723_script() {
 fn run_remote_pep723_script_with_nonexistent_ssl_cert_file() {
     let context = uv_test::test_context!("3.12");
 
-    uv_snapshot!(context.filters(), context.run()
+    // OpenSSL's error names the source file and line that raised it, which varies by release.
+    let filters: Vec<_> = [(r"[^:\s]+\.c:\d+:", "[OPENSSL_SOURCE]:")]
+        .into_iter()
+        .chain(context.filters())
+        .collect();
+
+    uv_snapshot!(filters, context.run()
         .arg("https://raw.githubusercontent.com/astral-sh/uv/df45b9ac2584824309ff29a6a09421055ad730f6/scripts/uv-run-remote-script-test.py")
         .arg(EnvVars::CI)
         .env(EnvVars::SSL_CERT_FILE, context.temp_dir.join("missing.pem"))
@@ -4658,7 +4664,8 @@ fn run_remote_pep723_script_with_nonexistent_ssl_cert_file() {
     warning: Invalid `SSL_CERT_FILE`. Path does not exist: [TEMP_DIR]/missing.pem. No default certificates will be trusted.
     error: error sending request for url (https://raw.githubusercontent.com/astral-sh/uv/df45b9ac2584824309ff29a6a09421055ad730f6/scripts/uv-run-remote-script-test.py)
       Caused by: client error (Connect)
-      Caused by: invalid peer certificate: UnknownIssuer
+      Caused by: error:0A000086:SSL routines:tls_post_process_server_certificate:certificate verify failed:[OPENSSL_SOURCE]: (unable to get local issuer certificate)
+      Caused by: error:0A000086:SSL routines:tls_post_process_server_certificate:certificate verify failed:[OPENSSL_SOURCE]:
     ");
 }
 

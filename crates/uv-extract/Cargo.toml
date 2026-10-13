@@ -24,17 +24,16 @@ uv-static = { workspace = true }
 astral-tokio-tar = { workspace = true }
 async-compression = { workspace = true, features = ["gzip", "zstd"] }
 async_zip = { workspace = true }
-blake2 = { workspace = true }
+blake2 = { workspace = true, optional = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 hex = { workspace = true }
-md-5 = { workspace = true }
+openssl = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustc-hash = { workspace = true }
-sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true, features = ["compat"] }
@@ -42,6 +41,12 @@ tracing = { workspace = true }
 
 [features]
 default = []
+## BLAKE2b-256 hash verification. Kept on RustCrypto because OpenSSL cannot supply it: noble ships
+## 3.0.13, whose BLAKE2 provider offers only a fixed BLAKE2B-512, and the "size" parameter that
+## would yield a 256-bit digest arrived in OpenSSL 3.2. Off by default for the same reason as
+## `uv-auth/cloud-auth`: cargo unifies features across the graph, so a default would re-enable it
+## for every dependent. The FIPS build leaves it off, so the crate is absent, not merely unused.
+blake2b = ["dep:blake2"]
 
 [package.metadata.cargo-shear]
 # NOTE: `async-compression` owns the actual Deflate codec, but we need to

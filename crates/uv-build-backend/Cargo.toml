@@ -39,11 +39,11 @@ futures-lite = { workspace = true }
 globset = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+openssl = { workspace = true }
 rustc-hash = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 spdx = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -64,6 +64,7 @@ ignored = ["uv-options-metadata"]
 schemars = ["dep:schemars", "uv-pypi-types/schemars"]
 
 [dev-dependencies]
+sha2 = { workspace = true }
 uv-preview = { workspace = true, features = ["testing"] }
 
 anstream = { workspace = true }

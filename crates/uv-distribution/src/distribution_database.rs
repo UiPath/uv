@@ -709,7 +709,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
 
                 // Create a hasher for each hash algorithm.
                 let algorithms = http_hash_algorithms(hashes);
-                let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+                let mut hashers = algorithms
+                    .into_iter()
+                    .map(Hasher::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
                 let mut hasher = uv_extract::hash::HashReader::new(reader.compat(), &mut hashers);
 
                 // Download and unzip the wheel to a temporary directory.
@@ -909,7 +912,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
                     .map_err(|err| self.handle_response_errors(err))
                     .into_async_read();
                 let algorithms = http_hash_algorithms(hashes);
-                let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+                let mut hashers = algorithms
+                    .into_iter()
+                    .map(Hasher::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
                 let mut hasher = uv_extract::hash::HashReader::new(reader.compat(), &mut hashers);
 
                 // Download the wheel to a temporary file.
@@ -1158,7 +1164,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
 
             // Create a hasher for each hash algorithm.
             let algorithms = hashes.algorithms();
-            let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+            let mut hashers = algorithms
+                .into_iter()
+                .map(Hasher::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
             let mut hasher = uv_extract::hash::HashReader::new(file, &mut hashers);
 
             // Unzip the wheel to a temporary directory.

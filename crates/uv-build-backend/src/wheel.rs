@@ -6,7 +6,7 @@ use futures_lite::future::block_on;
 use futures_lite::io::{AsyncSeek, AsyncWrite, AsyncWriteExt};
 use globset::{GlobSet, GlobSetBuilder};
 use rustc_hash::FxHashSet;
-use sha2::{Digest, Sha256};
+use openssl::hash::{Hasher, MessageDigest};
 use std::fmt::{Display, Formatter};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
@@ -463,7 +463,10 @@ fn write_hashed(
     reader: &mut dyn Read,
     writer: &mut dyn Write,
 ) -> Result<RecordEntry, io::Error> {
-    let mut hasher = Sha256::new();
+    // SHA-256 comes from the system OpenSSL, so under a FIPS provider this is the validated
+    // module's implementation. It is an approved algorithm, so a failure here is an
+    // OpenSSL-internal one rather than a policy refusal.
+    let mut hasher = Hasher::new(MessageDigest::sha256()).map_err(io::Error::other)?;
     let mut size: u64 = 0;
     let mut buffer = vec![0; ZIP_STREAM_BUFFER_SIZE];
     loop {
@@ -476,13 +479,13 @@ fn write_hashed(
             // End of file
             break;
         }
-        hasher.update(&buffer[..read]);
+        hasher.update(&buffer[..read]).map_err(io::Error::other)?;
         writer.write_all(&buffer[..read])?;
         size += read as u64;
     }
     Ok(RecordEntry {
         path: path.to_string(),
-        hash: base64.encode(hasher.finalize()),
+        hash: base64.encode(hasher.finish().map_err(io::Error::other)?),
         size,
     })
 }
@@ -889,7 +892,9 @@ impl<W: AsyncWrite + AsyncSeek + Unpin> DirectoryWriter for ZipDirectoryWriter<W
         let entry = Self::entry(path, self.compression, Self::REGULAR_FILE_MODE);
         block_on(self.writer.write_entry_whole(entry, bytes))?;
 
-        let hash = base64.encode(Sha256::new().chain_update(bytes).finalize());
+        let hash = base64.encode(
+            openssl::hash::hash(MessageDigest::sha256(), bytes).map_err(io::Error::other)?,
+        );
         self.record.push(RecordEntry {
             path: path.to_string(),
             hash,
@@ -922,7 +927,9 @@ impl<W: AsyncWrite + AsyncSeek + Unpin> DirectoryWriter for ZipDirectoryWriter<W
             let entry = Self::entry(path, self.compression, mode);
             block_on(self.writer.write_entry_whole(entry, &bytes))?;
 
-            let hash = base64.encode(Sha256::new().chain_update(&bytes).finalize());
+            let hash = base64.encode(
+                openssl::hash::hash(MessageDigest::sha256(), &bytes).map_err(io::Error::other)?,
+            );
             self.record.push(RecordEntry {
                 path: path.to_string(),
                 hash,
@@ -992,7 +999,9 @@ impl FilesystemWriter {
 impl DirectoryWriter for FilesystemWriter {
     fn write_bytes(&mut self, path: &str, bytes: &[u8]) -> Result<(), Error> {
         trace!("Adding {}", path);
-        let hash = base64.encode(Sha256::new().chain_update(bytes).finalize());
+        let hash = base64.encode(
+            openssl::hash::hash(MessageDigest::sha256(), bytes).map_err(io::Error::other)?,
+        );
         self.record.push(RecordEntry {
             path: path.to_string(),
             hash,

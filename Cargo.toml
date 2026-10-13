@@ -47,7 +47,11 @@ uv-git-types = { version = "0.0.69", path = "crates/uv-git-types" }
 uv-globfilter = { version = "0.0.69", path = "crates/uv-globfilter" }
 uv-install-wheel = { version = "0.0.69", path = "crates/uv-install-wheel", default-features = false }
 uv-installer = { version = "0.0.69", path = "crates/uv-installer" }
-uv-keyring = { version = "0.0.69", path = "crates/uv-keyring" }
+# `default-features = false` lives here rather than on uv-auth's dependency line: cargo refuses
+# `default-features = false` on a workspace-inherited dependency. uv-keyring's defaults include
+# the `secret-service` backend, which pulls aes/pbkdf2/scrypt and cannot work in a container
+# with no DBus; uv-auth re-adds the two platform backends it does want.
+uv-keyring = { version = "0.0.69", path = "crates/uv-keyring", default-features = false }
 uv-logging = { version = "0.0.69", path = "crates/uv-logging" }
 uv-macros = { version = "0.0.69", path = "crates/uv-macros" }
 uv-metadata = { version = "0.0.69", path = "crates/uv-metadata" }
@@ -173,11 +177,11 @@ jiff = { version = "0.2.0", features = ["serde"] }
 junction = { version = "2.0.0" }
 libc = { version = "0.2.0" }
 mailparse = { version = "0.16.0" }
-md-5 = { version = "0.11.0" }
 memchr = { version = "2.7.4" }
 miette = { version = "7.2.0", features = ["fancy-no-backtrace"] }
 nix = { version = "0.31.2", features = ["resource", "signal"] }
 open = { version = "5.4.0" }
+openssl = { version = "0.10.81" }
 owo-colors = { version = "4.1.0" }
 papaya = { version = "0.2.4" }
 path-slash = { version = "0.2.1" }
@@ -213,7 +217,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
   "zstd",
   "stream",
   "system-proxy",
-  "rustls",
+  "native-tls",
   "socks",
   "multipart",
   "http2",

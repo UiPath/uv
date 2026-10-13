@@ -34,6 +34,8 @@ impl fmt::Display for PythonVersion {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
     #[error("Building source distributions is disabled")]
     NoBuild,
     #[error("Building source distributions for `{0}` is disabled")]

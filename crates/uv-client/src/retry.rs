@@ -9,7 +9,6 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::{
     RetryPolicy, Retryable, RetryableStrategy, default_on_request_error, default_on_request_success,
 };
-use rustls::{AlertDescription, Error as RustlsError};
 use tracing::{debug, trace};
 use url::Url;
 
@@ -260,32 +259,59 @@ fn is_retryable_status_error(reqwest_err: &reqwest::Error) -> bool {
         || status == StatusCode::TOO_MANY_REQUESTS
 }
 
-fn is_tls_certificate_error(reqwest_err: &reqwest::Error) -> bool {
-    let Some(rustls_error) = find_source::<RustlsError>(reqwest_err) else {
-        return false;
-    };
+/// OpenSSL's library code for the TLS layer (`ERR_LIB_SSL`).
+const ERR_LIB_SSL: std::ffi::c_int = 20;
 
-    // TODO(konsti): https://github.com/seanmonstar/reqwest/issues/2819#issuecomment-5032072023
-    match rustls_error {
-        RustlsError::InvalidCertificate(_) | RustlsError::NoCertificatesPresented => true,
-        RustlsError::AlertReceived(alert) => matches!(
-            alert,
-            AlertDescription::AccessDenied
-                | AlertDescription::BadCertificate
-                | AlertDescription::BadCertificateHashValue
-                | AlertDescription::BadCertificateStatusResponse
-                | AlertDescription::CertificateExpired
-                | AlertDescription::CertificateRequired
-                | AlertDescription::CertificateRevoked
-                | AlertDescription::CertificateUnknown
-                | AlertDescription::CertificateUnobtainable
-                | AlertDescription::DecryptError
-                | AlertDescription::NoCertificate
-                | AlertDescription::UnknownCA
-                | AlertDescription::UnsupportedCertificate
-        ),
-        _ => false,
-    }
+/// `SSL_R_CERTIFICATE_VERIFY_FAILED`: the peer's certificate chain did not verify -- an unknown
+/// issuer, an expired certificate, a name mismatch. What Rustls reports as `InvalidCertificate`.
+const SSL_R_CERTIFICATE_VERIFY_FAILED: std::ffi::c_int = 134;
+
+/// OpenSSL reports a TLS alert received from the peer as reason `SSL_AD_REASON_OFFSET + alert`.
+const SSL_AD_REASON_OFFSET: std::ffi::c_int = 1000;
+
+/// The certificate-related TLS alerts that are fatal rather than transient: the Rustls
+/// `AlertDescription`s upstream matched, by their RFC 8446 / RFC 6066 alert numbers.
+const CERTIFICATE_ALERTS: [std::ffi::c_int; 13] = [
+    41,  // no_certificate
+    42,  // bad_certificate
+    43,  // unsupported_certificate
+    44,  // certificate_revoked
+    45,  // certificate_expired
+    46,  // certificate_unknown
+    48,  // unknown_ca
+    49,  // access_denied
+    51,  // decrypt_error
+    111, // certificate_unobtainable
+    113, // bad_certificate_status_response
+    114, // bad_certificate_hash_value
+    116, // certificate_required
+];
+
+/// The OpenSSL TLS-layer reason codes behind `reqwest_err`, if it came from a TLS handshake.
+///
+/// native-tls exposes no portable error variants, but on Linux its error's source is the
+/// `ErrorStack` OpenSSL recorded, whose reason codes say what failed.
+fn tls_reason_codes(reqwest_err: &reqwest::Error) -> impl Iterator<Item = std::ffi::c_int> + '_ {
+    find_source::<openssl::error::ErrorStack>(reqwest_err)
+        .into_iter()
+        .flat_map(openssl::error::ErrorStack::errors)
+        .filter(|err| err.library_code() == ERR_LIB_SSL)
+        .map(openssl::error::Error::reason_code)
+}
+
+/// Returns `true` if the peer's certificate failed verification.
+pub(crate) fn is_tls_certificate_verify_error(reqwest_err: &reqwest::Error) -> bool {
+    tls_reason_codes(reqwest_err).any(|reason| reason == SSL_R_CERTIFICATE_VERIFY_FAILED)
+}
+
+/// Returns `true` for TLS failures caused by a certificate, which retrying will not fix: a failed
+/// verification of the peer's chain, or a certificate-related alert from the peer. Other TLS
+/// failures, such as an `internal_error` alert, stay retryable.
+fn is_tls_certificate_error(reqwest_err: &reqwest::Error) -> bool {
+    tls_reason_codes(reqwest_err).any(|reason| {
+        reason == SSL_R_CERTIFICATE_VERIFY_FAILED
+            || CERTIFICATE_ALERTS.contains(&(reason - SSL_AD_REASON_OFFSET))
+    })
 }
 
 /// Find the first source error of a specific type, including errors wrapped by [`io::Error`].

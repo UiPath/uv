@@ -56,7 +56,10 @@ html-escape = { workspace = true }
 http = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
+native-tls = "0.2.16"
+openssl = { workspace = true }
 owo-colors = { workspace = true }
+pem = "3.0.6"
 percent-encoding = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
@@ -64,7 +67,6 @@ reqwest-retry = { workspace = true }
 rkyv = { workspace = true }
 rmp-serde = { workspace = true }
 rustc-hash = { workspace = true }
-rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }
@@ -87,6 +89,7 @@ hyper-util = { workspace = true }
 insta = { workspace = true }
 rcgen = { workspace = true }
 regex = { workspace = true }
+rustls = { workspace = true, features = ["ring"] }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

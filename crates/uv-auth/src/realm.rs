@@ -90,6 +90,7 @@ pub struct RealmRef<'a> {
 
 impl RealmRef<'_> {
     /// Returns true if this realm is a subdomain of the other realm.
+    #[cfg(any(feature = "cloud-auth", test))]
     pub(crate) fn is_subdomain_of(&self, other: Self) -> bool {
         other.scheme == self.scheme
             && other.port == self.port
