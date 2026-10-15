@@ -51,6 +51,9 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+# The upload form carries a BLAKE2b-256 digest; the binary decides whether it can compute one,
+# the tests always do.
+uv-extract = { workspace = true, features = ["blake2b"] }
 uv-preview = { workspace = true, features = ["testing"] }
 
 anstream = { workspace = true }

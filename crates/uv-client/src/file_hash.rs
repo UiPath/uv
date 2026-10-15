@@ -23,12 +23,14 @@ pub enum FileHashError {
     StreamFile(Box<DisplaySafeUrl>, #[source] std::io::Error),
     #[error("Failed to read `{0}` to compute missing hashes")]
     ReadFile(Box<Path>, #[source] std::io::Error),
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
 }
 
 impl RegistryClient {
     /// Read or download a file and compute its SHA-256 digest without extracting its contents.
     pub async fn hash_file(&self, url: &DisplaySafeUrl) -> Result<HashDigest, FileHashError> {
-        let mut hashers = [Hasher::from(HashAlgorithm::Sha256)];
+        let mut hashers = [Hasher::try_from(HashAlgorithm::Sha256)?];
         if url.scheme() == "file" {
             let path = url.to_file_path().map_err(|()| FileHashError::UrlToPath)?;
             let file = fs_err::tokio::File::open(&path)

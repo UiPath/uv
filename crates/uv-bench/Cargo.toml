@@ -64,7 +64,7 @@ uv-dispatch = { workspace = true }
 uv-distribution = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
-uv-extract = { workspace = true }
+uv-extract = { workspace = true, features = ["blake2b"] }
 uv-install-wheel = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }

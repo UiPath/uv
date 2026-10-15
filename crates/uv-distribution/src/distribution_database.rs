@@ -819,7 +819,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
 
                 // Create a hasher for each hash algorithm.
                 let algorithms = http_hash_algorithms(hashes);
-                let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+                let mut hashers = algorithms
+                    .into_iter()
+                    .map(Hasher::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
                 let mut hasher = uv_extract::hash::HashReader::new(reader.compat(), &mut hashers);
 
                 // Download and unzip the wheel to a temporary directory.
@@ -1134,7 +1137,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
         ));
 
         // States for the download loop below.
-        let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+        let mut hashers = algorithms
+            .into_iter()
+            .map(Hasher::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         // The total number of bytes retrieved, accumulated over individual requests.
         // Note that this is *not* the same as the number of bytes actually written
         // to the temporary file, since a copy from the response to the file can fail.
@@ -1187,8 +1193,8 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
                     .map_err(Error::CacheWrite)?;
                 hashers = http_hash_algorithms(hashes)
                     .into_iter()
-                    .map(Hasher::from)
-                    .collect();
+                    .map(Hasher::try_from)
+                    .collect::<Result<_, _>>()?;
                 bytes_retrieved = 0;
             }
 
@@ -1479,7 +1485,10 @@ impl<'a, Context: BuildContext> DistributionDatabase<'a, Context> {
             algorithms.extend(hashes.algorithms());
             algorithms.sort();
             algorithms.dedup();
-            let mut hashers = algorithms.into_iter().map(Hasher::from).collect::<Vec<_>>();
+            let mut hashers = algorithms
+                .into_iter()
+                .map(Hasher::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
             let mut hasher = uv_extract::hash::HashReader::new(file, &mut hashers);
 
             // Unzip the wheel to a temporary directory.
