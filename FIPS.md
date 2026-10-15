@@ -81,7 +81,10 @@ There is no workaround short of enabling the feature.
 
 `UV_S3_ENDPOINT_URL`, `UV_AZURE_ENDPOINT_URL` and `UV_GCS_ENDPOINT_URL` are
 honoured only when the `cloud-auth` feature is on. Requests to those endpoints
-are otherwise unsigned, and authenticated buckets reject them.
+are otherwise unsigned, and authenticated buckets reject them. Recognising an
+Azure endpoint is a URL match and stays in both builds, so an anonymous request
+to one still carries the storage API version that makes Azure answer with a
+bearer challenge.
 
 ### 5. The `SSL_CLIENT_CERT` key must be unencrypted
 
@@ -119,8 +122,10 @@ index URL.
 | `blake2` | BLAKE2b-256 pinned hashes | present | absent |
 | `sha1`, `hmac` | reqsign request signing | present | absent |
 | `rsa` | reqsign's Azure and Google signers | present | absent |
-| `aes`, `pbkdf2`, `scrypt`, `pkcs5` | secret-service keyring | absent | absent |
+| `aes`, `pbkdf2`, `scrypt`, `pkcs5` | reqsign's RSA key decoding (`pkcs8` decryption) | present | absent |
 | `sha2` | see below | present | present, unreachable |
+| `blake3` | content addresses in the wheel cache, see below | present | present |
+| `chacha20` | `rand`'s generator, which jitters retry delays, see below | present | present |
 
 `sha2` survives in the FIPS build through `cargo-util`, which exposes a `Sha256`
 helper from a standalone module. `uv-git` imports `ProcessBuilder`,
@@ -129,6 +134,24 @@ it, and `cargo-util` has no feature to drop it — so removing it would mean
 forking a crates.io crate to delete dead code. It is the one documented
 exception, and it is asserted rather than assumed: the build checks that
 `cargo-util` is the *only* crate depending on `sha2`, so a reachable one fails.
+
+`blake3` arrived with uv's dirhash scheme (`uv_extract::dirhash`). It names an
+extracted wheel in the cache by the BLAKE3 digest of its files, the way a git
+object id names its content, and re-extracts an entry whose files no longer
+match. That is a cache identifier rather than a security function: what is
+downloaded is still verified against the index's SHA-256 digest in the module
+before it is extracted, and whoever can rewrite the cache can rewrite the
+identifier with it, so no protection rests on BLAKE3. It is the second
+documented exception, asserted the same way: the build checks that
+`uv-extract` is the only crate depending on `blake3`, so a new use of it
+elsewhere fails until someone has looked at it.
+
+`chacha20` is the generator behind `rand::rng()`. `retry-policies` calls it to
+randomise the delay before a retried request, and nothing else in the graph
+draws from it: the secure IDs come from the module (see above). A predictable
+retry delay protects nothing, so this is the third documented exception. It
+is asserted the same way, one level at a time: `rand` must be the only crate
+depending on `chacha20`, and `retry-policies` the only one depending on `rand`.
 
 ## Verifying a build
 
@@ -139,6 +162,16 @@ reads and what a future uv bump silently changes:
 # Must print nothing.
 cargo tree --locked -p uv --edges normal --no-default-features --features performance \
   | grep -E '(^|[[:space:]])(sha1|sha3|md-5|blake2|rsa|aes|hmac|pbkdf2|scrypt|pkcs5|secret-service) v'
+
+# Must print only cargo-util, then only uv-extract, then only rand.
+for crate in sha2 blake3 chacha20; do
+  cargo tree --locked -p uv --edges normal --no-default-features --features performance \
+    --invert "$crate" --depth 1 | tail -n +2
+done
+
+# Must print only retry-policies.
+cargo tree --locked -p uv --edges normal --no-default-features --features performance \
+  --invert rand --depth 1 | tail -n +2
 
 # Must resolve to the system libssl, not a vendored or static copy.
 ldd target/release/uv | grep -E 'lib(ssl|crypto)\.so\.3'
