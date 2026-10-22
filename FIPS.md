@@ -191,3 +191,14 @@ uv's resolution and installation still trust whatever the index serves. Nothing
 here adds package **signature** verification, and moving the hashing into the
 module does not make an unsigned package trustworthy — it only means the
 integrity check that already existed is performed by the validated module.
+
+It also does not carry distrust that upstream implements only in Rustls. uv
+0.13.5 rejects chains through the compromised eMudhra intermediate keys with
+rustls-webpki's list of distrusted public keys. OpenSSL has no equivalent, so
+this fork trusts exactly the roots it is given: webpki-root-certs by default,
+the system store with `UV_SYSTEM_CERTS`. Neither webpki-root-certs 1.0.10 nor
+Ubuntu's `20260816` ca-certificates holds a root that anchors those
+intermediates or their Sectigo cross-signs, as `openssl verify` confirms, but a
+store that still carries one of those roots trusts them. Any later distrust that
+upstream ships only in rustls-webpki likewise applies here only once the root
+is gone from the store.
