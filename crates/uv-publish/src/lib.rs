@@ -97,6 +97,8 @@ pub enum PublishError {
 pub enum PublishPrepareError {
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
     #[error("Invalid authorization header")]
     InvalidHeaderValue(#[from] InvalidHeaderValue),
     #[error("Failed to read metadata")]
@@ -938,12 +940,13 @@ impl<'a> PublishSession<'a> {
         if let Some(remote_hash) = archived_file.hashes().first() {
             // We accept the risk for TOCTOU errors here, since we already read the file once before the
             // streaming upload to compute the hash for the form metadata.
-            let [local_hash] = hash_file(
-                file,
-                filename,
-                [Hasher::from(remote_hash.algorithm())],
-                reporter,
-            )
+            // The registry chooses the algorithm here, so it may name one this build cannot compute
+            // (md5 under a FIPS provider). Surfaced rather than silently skipped: failing to check a
+            // hash the registry published is not the same as there being nothing to check.
+            let hasher = Hasher::try_from(remote_hash.algorithm()).map_err(|err| {
+                PublishError::PublishPrepare(file.clone(), Box::new(PublishPrepareError::Hasher(err)))
+            })?;
+            let [local_hash] = hash_file(file, filename, [hasher], reporter)
             .await
             .map_err(|err| {
                 PublishError::PublishPrepare(file.clone(), Box::new(PublishPrepareError::Io(err)))
@@ -1007,7 +1010,7 @@ async fn hash_file<const COUNT: usize>(
         let mut hashers = hashers;
         let mut buffer = vec![0; 64 * 1024];
 
-        let result = loop {
+        let result = 'read: loop {
             let read = match file.read(&mut buffer) {
                 Ok(0) => break Ok(()),
                 Ok(read) => read,
@@ -1016,7 +1019,9 @@ async fn hash_file<const COUNT: usize>(
             };
             reporter.on_hash_progress(index, read as u64);
             for hasher in &mut hashers {
-                hasher.update(&buffer[..read]);
+                if let Err(err) = hasher.update(&buffer[..read]) {
+                    break 'read Err(io::Error::other(err));
+                }
             }
         };
         reporter.on_hash_complete(index);
@@ -1174,8 +1179,8 @@ impl FormMetadata {
             file,
             filename,
             [
-                Hasher::from(HashAlgorithm::Sha256),
-                Hasher::from(HashAlgorithm::Blake2b256),
+                Hasher::try_from(HashAlgorithm::Sha256)?,
+                Hasher::try_from(HashAlgorithm::Blake2b256)?,
             ],
             reporter,
         )

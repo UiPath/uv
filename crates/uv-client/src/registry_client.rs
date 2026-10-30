@@ -1451,8 +1451,12 @@ impl FlatIndexCache {
 /// Verify all hashes advertised for a metadata file.
 fn verify_metadata_hashes(url: &SafeUrl, bytes: &[u8], hashes: &HashDigests) -> Result<(), Error> {
     for expected in hashes.iter() {
-        let mut hasher = Hasher::from(expected.algorithm());
-        hasher.update(bytes);
+        // The index chooses the algorithm, so it may name one this build cannot
+        // compute (md5 under a FIPS provider).
+        let mut hasher = Hasher::try_from(expected.algorithm()).map_err(ErrorKind::Hasher)?;
+        hasher
+            .update(bytes)
+            .map_err(|err| ErrorKind::Io(std::io::Error::other(err)))?;
         let actual = HashDigest::from(hasher);
         if &actual != expected {
             return Err(Error::from(ErrorKind::MetadataHashMismatch {

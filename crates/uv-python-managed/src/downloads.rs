@@ -56,6 +56,8 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
+    #[error(transparent)]
     Request(#[from] PythonDownloadRequestError),
     #[error("Expected download URL (`{0}`) to end in a supported file extension: {1}")]
     MissingExtension(String, ExtensionError),
@@ -747,7 +749,8 @@ impl ManagedPythonDownload {
         let mut hashers = self
             .sha256
             .as_ref()
-            .map(|_| Hasher::from(HashAlgorithm::Sha256));
+            .map(|_| Hasher::try_from(HashAlgorithm::Sha256))
+            .transpose()?;
         let mut hasher = uv_extract::hash::HashReader::new(reader, hashers.as_mut_slice());
 
         let target = if let Some(reporter) = reporter {

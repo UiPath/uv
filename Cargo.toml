@@ -52,7 +52,11 @@ uv-globfilter = { version = "0.0.97", path = "crates/uv-globfilter" }
 uv-install-operations = { version = "0.0.97", path = "crates/uv-install-operations" }
 uv-install-wheel = { version = "0.0.97", path = "crates/uv-install-wheel", default-features = false }
 uv-installer = { version = "0.0.97", path = "crates/uv-installer" }
-uv-keyring = { version = "0.0.97", path = "crates/uv-keyring" }
+# `default-features = false` lives here rather than on uv-auth's dependency line: cargo refuses
+# `default-features = false` on a workspace-inherited dependency. uv-keyring's defaults include
+# the `secret-service` backend, which pulls aes/pbkdf2/scrypt and cannot work in a container
+# with no DBus; uv-auth re-adds the two platform backends it does want.
+uv-keyring = { version = "0.0.97", path = "crates/uv-keyring", default-features = false }
 uv-lock = { version = "0.0.97", path = "crates/uv-lock" }
 uv-lock-operations = { version = "0.0.97", path = "crates/uv-lock-operations" }
 uv-logging = { version = "0.0.97", path = "crates/uv-logging" }
@@ -215,9 +219,9 @@ jiff = { version = "0.2.0", default-features = false, features = [
 junction = { version = "2.0.0", default-features = false, features = ["unstable_admin"] }
 libc = { version = "0.2.0", default-features = false, features = ["std"] }
 linux-raw-sys = { version = "0.12.1", default-features = false, features = ["ioctl"] }
-md-5 = { version = "0.11.0", default-features = false }
 memchr = { version = "2.7.4", default-features = false, features = ["std"] }
 nix = { version = "0.31.2", default-features = false, features = ["resource", "signal"] }
+openssl = { version = "0.10.81", default-features = false }
 owo-colors = { version = "4.1.0", default-features = false }
 papaya = { version = "0.2.5", default-features = false }
 path-slash = { version = "0.2.1", default-features = false }
@@ -265,7 +269,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
   "zstd",
   "stream",
   "system-proxy",
-  "rustls",
+  "native-tls",
   "socks",
   "multipart",
   "http2",

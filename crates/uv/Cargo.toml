@@ -151,8 +151,15 @@ wiremock = { workspace = true }
 uv-unix = { workspace = true }
 
 [features]
-default = ["performance", "test-defaults"]
+default = ["performance", "test-defaults", "cloud-auth", "blake2b"]
 native-auth = []
+# Crypto that is not the system OpenSSL. Both are on for the commercial build and off for the
+# FedRAMP one, which builds with `--no-default-features --features performance` so that no
+# RustCrypto implementation is compiled into the binary at all.
+# `cloud-auth` carries reqsign (sha1, hmac, and rsa via its azure/google signers); `blake2b`
+# carries the blake2 crate, which OpenSSL 3.0 cannot replace -- see uv-extract/Cargo.toml.
+cloud-auth = ["uv-auth/cloud-auth"]
+blake2b = ["uv-extract/blake2b"]
 # Use better memory allocators, etc.
 performance = ["performance-memory-allocator"]
 performance-memory-allocator = ["dep:uv-performance-memory-allocator"]

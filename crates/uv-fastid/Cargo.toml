@@ -13,7 +13,7 @@ license.workspace = true
 doctest = false
 
 [dependencies]
-rand = { workspace = true }
+openssl = { workspace = true }
 serde = { workspace = true, optional = true }
 
 [dev-dependencies]

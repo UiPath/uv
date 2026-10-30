@@ -1,4 +1,5 @@
 pub use error::Error;
+pub use hash::HasherError;
 use regex::regex;
 pub use sync::*;
 use uv_static::EnvVars;

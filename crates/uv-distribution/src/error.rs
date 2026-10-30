@@ -39,6 +39,8 @@ pub enum Error {
     UnsupportedWheelVariant(Box<WheelFilename>),
     #[error("Wheel variant has unsupported properties: `{0}`")]
     IncompatibleWheelVariant(Box<WheelFilename>),
+    #[error(transparent)]
+    Hasher(#[from] uv_extract::HasherError),
     #[error("Building source distributions is disabled")]
     NoBuild,
     #[error("Building source distributions for `{0}` is disabled")]
@@ -323,6 +325,7 @@ impl Error {
             | Self::MetadataLowering(_)
             | Self::NotFound(_)
             | Self::RequiresPython(..)
+            | Self::Hasher(_)
             | Self::MismatchedHashes { .. }
             | Self::MismatchedSize { .. }
             | Self::MismatchedContentLength { .. }
