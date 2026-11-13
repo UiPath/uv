@@ -262,7 +262,7 @@ six==1.16.0
 slack-sdk==3.18.1
 sniffio==1.2.0
 sortedcontainers==2.4.0
-soupsieve==2.3.2.post1
+soupsieve==4.0
 SQLAlchemy==1.4.27
 sqlalchemy-bigquery==1.4.4
 SQLAlchemy-JSONField==1.0.0
