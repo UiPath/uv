@@ -29,7 +29,7 @@ apispec==3.3.2
 argcomplete==2.0.0
 asn1crypto==1.5.1
 attrs==22.1.0
-Authlib==0.15.5
+Authlib==1.9.1
 azure-batch==12.0.0
 azure-common==1.1.28
 azure-core==1.25.0
