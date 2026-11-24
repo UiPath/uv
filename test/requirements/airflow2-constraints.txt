@@ -197,7 +197,7 @@ mdit-py-plugins==0.3.0
 mdurl==0.1.2
 msal==1.18.0
 msal-extensions==1.0.0
-msgpack==1.0.4
+msgpack==1.2.3
 msrest==0.7.1
 msrestazure==0.6.4
 mypy-boto3-appflow==1.24.36.post1
