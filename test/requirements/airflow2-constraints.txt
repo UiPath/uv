@@ -206,7 +206,7 @@ mypy-boto3-redshift-data==1.24.36.post1
 mysql-connector-python==8.0.30
 mysqlclient==2.1.1
 numpy==1.22.4
-oauthlib==3.2.0
+oauthlib==4.0.1
 packaging==21.3
 pandas==1.4.3
 pandas-gbq==0.17.8
